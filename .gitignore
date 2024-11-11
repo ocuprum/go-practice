@@ -23,3 +23,8 @@ go.work.sum
 
 # env file
 .env
+
+.DS_Store
+
+server_client/uploads/*
+server_client/tmp/*
