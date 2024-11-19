@@ -73,21 +73,22 @@ func init() {
 
 func NewMux() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc(FOO_PATH, func(resp http.ResponseWriter, req *http.Request) {
+	
+	mux.HandleFunc(getPath(FOO_PATH), func(resp http.ResponseWriter, req *http.Request) {
 		resp.Write([]byte("Hello, world!"))
 	})
 
-	mux.HandleFunc(JSON_PATH, func(resp http.ResponseWriter, req *http.Request) {
+	mux.HandleFunc(getPath(JSON_PATH), func(resp http.ResponseWriter, req *http.Request) {
 		resp.Header().Set("Content-Type", "application/json; charset=utf-8")
 		resp.Write(jsonData)
 	})
 
-	mux.HandleFunc(XML_PATH, func(resp http.ResponseWriter, req *http.Request) {
+	mux.HandleFunc(getPath(XML_PATH), func(resp http.ResponseWriter, req *http.Request) {
 		resp.Header().Set("Content-Type", "application/xml; charset=utf-8")
 		resp.Write(xmlData)
 	})
 
-	mux.HandleFunc(DOWNLOAD_PATH, func(resp http.ResponseWriter, req *http.Request) {
+	mux.HandleFunc(getPath(DOWNLOAD_PATH), func(resp http.ResponseWriter, req *http.Request) {
 		fileBytes, err := ReadFile(FILENAME)
 		if err != nil {
 			writeResponse(resp, http.StatusBadRequest, "Can't read the file", FILENAME)
@@ -98,7 +99,7 @@ func NewMux() *http.ServeMux {
 		resp.Write(fileBytes)
 	})
 	
-	mux.HandleFunc(UPLOAD_PATH, func(resp http.ResponseWriter, req *http.Request) {
+	mux.HandleFunc(postPath(UPLOAD_PATH), func(resp http.ResponseWriter, req *http.Request) {
 		// if file is too large
 		if req.ContentLength > (maxUploadSize) {
 			writeResponse(resp, http.StatusRequestEntityTooLarge, "File is too large")

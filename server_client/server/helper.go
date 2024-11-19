@@ -5,6 +5,14 @@ import (
 	"strings"
 )
 
+func getPath(path string) string {
+	return "GET " + path
+}
+
+func postPath(path string) string {
+	return "POST " + path
+}
+
 func writeResponse(resp http.ResponseWriter, statusCode int, explanations ...string) {
 	resp.WriteHeader(statusCode)
 	resp.Write([]byte(http.StatusText(statusCode)))
@@ -15,3 +23,4 @@ func writeResponse(resp http.ResponseWriter, statusCode int, explanations ...str
 		resp.Write([]byte(fullText))
 	}
 }
+
