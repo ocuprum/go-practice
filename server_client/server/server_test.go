@@ -52,250 +52,159 @@ func TestServerGetEndpoint(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		resp, err := client.Get(fmt.Sprintf("http://0.0.0.0:8080%s", test.endpoint))
-		if err != nil {
-			t.Error(err)
-		}
-		if got := resp.StatusCode; got != test.want {
-			t.Errorf("Wrong resp.statusCode on %s endpoint, statusCode is %d, want %d", test.endpoint, got, test.want)
-		}
+		u := fmt.Sprintf("http://0.0.0.0:8080%s", test.endpoint)
+		assert.HTTPStatusCode(t, srv.Handler.ServeHTTP, http.MethodGet, u, nil, test.want)
 	}
 }
 
 func TestServerJSON(t *testing.T) {
-	resp, err := client.Get("http://0.0.0.0:8080/json")
-	if err != nil {
-		t.Fatal(err)
-	}
+	resp, err := client.Get(fmt.Sprintf("http://0.0.0.0:8080%s", JSON_PATH))
+	require.NoError(t, err, "Client failed to GET the http://0.0.0.0:8080%s", JSON_PATH)
 
 	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "Error reading the resp.Body")
 
 	var books []Book
-	if err = json.Unmarshal(body, &books); err != nil {
-		t.Fatal(err)
-	}
+	err = json.Unmarshal(body, &books)
+	require.NoError(t, err, "Error unmarshalling the books json")
 
 	want := 3
-	if got := len(books); got != want {
-		t.Errorf("Books len = %d, want %d", got, want)
-	}
+	assert.Equal(t, want, len(books), "Books len = %d, want %d", len(books), want)
 }
 
 func TestDownloadFile(t *testing.T) {
-	resp, err := client.Get("http://0.0.0.0:8080/download")
-	if err != nil {
-		t.Fatal(err)
-	}
+	resp, err := client.Get(fmt.Sprintf("http://0.0.0.0:8080%s", DOWNLOAD_PATH))
+	require.NoError(t, err, "Client failed to GET the http://0.0.0.0:8080%s", DOWNLOAD_PATH)
 
 	//check content type
-	if ct := resp.Header.Get("Content-Type"); ct != "image/png" {
-		t.Errorf("Content-Type is %s, want = image/png", ct)
-	}
+	ct := resp.Header.Get("Content-Type")
+	want := "image/png"
+	require.Equal(t, want, ct, "Content-Type is %s, want = %s", ct, want)
 
 	//check content disposition
 	cd := resp.Header.Get("Content-Disposition")
 	cdSlice := strings.Split(cd, ";")
 	cd = cdSlice[0]
-	if cd != "attachment" {
-		t.Errorf("Content-Type is %s, want = attachment", cd)
-	}
+	want = "attachment"
+	require.Equal(t, want, cd, "Content-Disposition is %s, want = %s", cd, want)
 
 	//check filename
-	if len(cdSlice) > 1 {
-		for _, param := range cdSlice[1:] {
-			if strings.HasPrefix(strings.TrimSpace(param), "filename=") {
-				filename := strings.TrimSpace(param)[len("filename="):]
-				if filename != FILENAME {
-					t.Errorf("Filename is %s, want = %s", filename, FILENAME)
-				}
-			}
+	require.Greater(t, len(cdSlice), 1, "There is no filename parameter in Content-Disposition")
+	for _, param := range cdSlice[1:] {
+		if strings.HasPrefix(strings.TrimSpace(param), "filename=") {
+			filename := strings.TrimSpace(param)[len("filename="):]
+			require.Equal(t, FILENAME, filename, "Filename is %s, want = %s", filename, FILENAME)
 		}
-	} else {
-		t.Fatalf("There is no filename parameter in Content-Disposition")
 	}
 	
 	//check file
 	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "Error reading the resp.Body")
+
 
 	fileBytes, err := os.ReadFile("./tmp/"+FILENAME)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "Error reading the resp.Body")
 
-	if !bytes.Equal(body, fileBytes) {
-		t.Errorf("Body content is not identical to original file")
-	}
+	assert.True(t, bytes.Equal(body, fileBytes), "Body content is not identical to original file")
+}
+
+func testUpload(t *testing.T, filename string, content []byte, errMsgTemplate string, want int) {
+	resp := sendFile(t, filename, content)
+	got := resp.StatusCode
+	assert.Equal(t, want, got, errMsgTemplate, UPLOAD_PATH, got, want)
 }
 
 func TestUploadFile(t *testing.T) {
-	resp, err := SendFile()
-	if err != nil {
-		t.Fatal(err)
-	}
+	fp := filepath.Join("./uploads", FILENAME)
+	content, err := os.ReadFile(fp)
+	require.NoError(t, err, "Error opening the file %s", fp)
 
-	if got := resp.StatusCode; got != http.StatusOK {
-		t.Errorf("Wrong resp.statusCode on %s endpoint, statusCode is %d, want %d", UPLOAD_PATH, got, http.StatusOK)
-	}
+	testUpload(t, FILENAME, content, "Wrong resp.statusCode on %s endpoint, statusCode is %d, want %d", http.StatusOK)
 }
 
 func TestMaxUploadSize(t *testing.T) {
-	var body = &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	fileWriter, err := writer.CreateFormFile("myfiles", FILENAME)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	content := make([]byte, maxUploadSize+1) 
-
-	_, err = io.Copy(fileWriter, bytes.NewReader(content))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	writer.Close()
-
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://0.0.0.0:8080%s", UPLOAD_PATH), body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-
-	if got := resp.StatusCode; got != http.StatusRequestEntityTooLarge {
-		t.Errorf("Sending oversized file on %s endpoint, statusCode is %d, want %d", UPLOAD_PATH, got, http.StatusRequestEntityTooLarge)
-	}
+	content := make([]byte, maxUploadSize + 1)
+	filename := "maxSizeTest.txt"
+	testUpload(t, filename, content, "Sending oversized file on %s endpoint, statusCode is %d, want %d", http.StatusRequestEntityTooLarge)
 }
 
 func TestSaveFile(t *testing.T) {
-	filename := "testfile.txt"
-
-	var body = &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	fileWriter, err := writer.CreateFormFile("myfiles", filename)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	filename := "saveFileTest.txt"
 	content := []byte("this is test file")
-
-	_, err = io.Copy(fileWriter, bytes.NewReader(content))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	writer.Close()
-
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://0.0.0.0:8080%s", UPLOAD_PATH), body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-
+	testUpload(t, filename, content, "Error saving the file on %s endpoint, statusCode is %d, want %d", http.StatusOK)
+	
 	savedFilePath := filepath.Join("./uploads", filename)
-	if !FileExists(savedFilePath) {
-		t.Errorf("File %s is not saved on server in %s dir", filename, UPLOAD_PATH)
-	} else {
-		savedContent, err := os.ReadFile(savedFilePath)
-		if err != nil {
-			t.Fatal(err)
-		}
+	require.FileExists(t, savedFilePath, "File %s is not saved on server in %s dir", filename, UPLOAD_PATH)
 
-		if !bytes.Equal(savedContent, content) {
-			t.Errorf("Content of a saved file %s is not identical to content from client's file", filename)
-		}
+	savedContent, err := os.ReadFile(savedFilePath)
+	require.NoError(t, err, "Error reading saved file %s", savedFilePath)
+	assert.Equal(t, savedContent, content, "Content of a saved file %s is not identical to content from client's file", filename)
+}
+
+func endpointBenchmark(b *testing.B, endpoint string) {
+	u := fmt.Sprintf("http://0.0.0.0:8080%s", endpoint)
+	for i := 0; i < b.N; i++ {
+		require.HTTPSuccess(b, srv.Handler.ServeHTTP, http.MethodGet, u, nil, 
+						    "Client failed to GET the http://0.0.0.0:8080%s", endpoint)
 	}
 }
 
-
 func BenchmarkServerFooEndpoint(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		_, err := client.Get("http://0.0.0.0:8080/foo")
-		if err != nil {
-			b.Error(err)
-		}
-	}
+	endpointBenchmark(b, FOO_PATH)
 }
 
 func BenchmarkServerJSONEndpoint(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		_, err := client.Get("http://0.0.0.0:8080/json")
-		if err != nil {
-			b.Error(err)
-		}
-	}
+	endpointBenchmark(b, JSON_PATH)
 }
 
 func BenchmarkServerXMLEndpoint(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		_, err := client.Get("http://0.0.0.0:8080/xml")
-		if err != nil {
-			b.Error(err)
-		}
-	}
+	endpointBenchmark(b, XML_PATH)
 }
 
 func BenchmarkServerDownloadEndpoint(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		_, err := client.Get("http://0.0.0.0:8080/download")
-		if err != nil {
-			b.Error(err)
-		}
-	}
+	endpointBenchmark(b, DOWNLOAD_PATH)
 }
 
-
-func SendFile() (*http.Response, error) {
+func sendFile(t *testing.T, filename string, content []byte) (resp *http.Response) {
 	var body = &bytes.Buffer{}
+	
 	writer := multipart.NewWriter(body)
-	fileWriter, err := writer.CreateFormFile("myfiles", FILENAME)
-	if err != nil {
-		return nil, err
-	}
+	fileWriter, err := writer.CreateFormFile("myfiles", filename)
+	require.NoError(t, err, "Error creating a form")
 
-	file, err := os.Open(filepath.Join("./uploads", FILENAME))
-	if err != nil {
-		return nil, err
-	}
+	_, err = io.Copy(fileWriter, bytes.NewReader(content))
+	require.NoError(t, err, "Error copying content to a writer")
+	// if overflow {
+	// 	content = make([]byte, maxUploadSize + 1)
+	// 	_, err = io.Copy(fileWriter, bytes.NewReader(content))
+	// 	require.NoError(t, err, "Error copying oversized content to a writer")
 
-	_, err = io.Copy(fileWriter, file) 
-	if err != nil {
-		return nil, err
-	}
+	// } else if filename != FILENAME {
+	// 	content = append(content, []byte("this is test file")...)
+	// 	_, err = io.Copy(fileWriter, bytes.NewReader(content))
+	// 	require.NoError(t, err, "Error copying test file content to a writer")
 
-	file.Close()
-	writer.Close()
+	// } else if filename == FILENAME {
+	// 	fp := filepath.Join("./uploads", filename)
+	// 	content, err := os.ReadFile(fp)
+	// 	require.NoError(t, err, "Error opening the file %s", fp)
 
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://0.0.0.0:8080%s", UPLOAD_PATH), body)
-	if err != nil {
-		return nil, err
-	}
+	// 	_, err = io.Copy(fileWriter, bytes.NewReader(content))
+	// 	require.NoError(t, err, "Error copying the file %s to a writer", fp)
+	// }
+
+	require.NoError(t, writer.Close(), "Error closing multipart writer")
+
+	u := fmt.Sprintf("http://0.0.0.0:8080%s", UPLOAD_PATH)
+	req, err := http.NewRequest(http.MethodPost, u, body)
+	require.NoError(t, err, "Error creating a new POST request to %s", u)
 
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
+	resp, err = client.Do(req)
+	require.NoError(t, err, "Error sending the POST request to %s", u)
+
 	defer resp.Body.Close()
 
-	return resp, nil
+	return resp
 }
