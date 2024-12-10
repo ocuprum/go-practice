@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"testapp/config"
 	"testapp/pgsql"
 	// repsPgSQL "testapp/repositories/pgsql"
 	"testapp/server"
@@ -9,19 +10,15 @@ import (
 	"gorm.io/gorm"
 )
 
+const CONFIG_NAME, CONFIG_EXTENSION, CONFIG_PATH = "config", "yaml", "."
 
 func main() {
-	config := pgsql.Config{
-		Host: "localhost",
-		User: "user",
-		Password: "password",
-		DBname: "mydb",
-		Port: 5432,
-		SSLmode: "disable",
-		Timezone: "Europe/Kyiv",
+	conf, err := config.LoadConfig(CONFIG_NAME, CONFIG_EXTENSION, CONFIG_PATH)
+	if err != nil {
+		log.Fatalf("Error loading a config: %v", err)
 	}
 
-	db, err := pgsql.NewPgSQLConnection(config)
+	db, err := pgsql.NewPgSQLConnection(conf.PgSQL)
 	if err != nil {
 		log.Fatalf("Error connecting to pgsql db: %v", err)
 	}
@@ -36,8 +33,7 @@ func main() {
 	log.Printf("Database Size: %s\n", DatabaseSize)
 
 	// Server
-	var port uint16 = 8080
-	srv := server.NewServer(port)
+	srv := server.NewServer(conf.HTTP.Port)
 	
 	log.Printf("We are starting on %v", srv.Addr)
 	

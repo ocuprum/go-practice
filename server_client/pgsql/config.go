@@ -4,8 +4,8 @@ type Config struct {
 	Host     string
 	User     string
 	Password string
-	DBname   string
+	DBName   string
 	Port     uint16
-	SSLmode  string
+	SSLMode  string
 	Timezone string
 }

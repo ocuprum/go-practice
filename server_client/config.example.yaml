@@ -1,0 +1,12 @@
+pgsql:
+  Host: "host"
+  User: "user"
+  Password: "password"
+  DBName: "dbname"
+  Port: 5432
+  SSLMode: "disable"
+  Timezone: "UTC"
+
+http:
+  Host: "0.0.0.0"
+  Port: 8080
