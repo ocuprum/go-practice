@@ -21,6 +21,7 @@ func (r *ImageRepository) Paginate(ctx context.Context, limit, offset int) (imag
 	if err != nil {
 		return []models.Image{}, err
 	}
+	
 	return images, nil
 }
 
@@ -33,9 +34,14 @@ func (r *ImageRepository) Get(ctx context.Context, id uuid.UUID) (image models.I
 	if err != nil {
 		return models.Image{}, err
 	}
+
 	return image, nil
 }
 
 func (r *ImageRepository) Delete(ctx context.Context, ids []uuid.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
 	return r.conn.WithContext(ctx).Where("id IN (?)", ids).Delete(&models.Image{}).Error
 }

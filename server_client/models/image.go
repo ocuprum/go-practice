@@ -13,7 +13,7 @@ func NewImage(id uuid.UUID, contentType string, content []byte) Image {
 }
 
 type Image struct {
-	ID          uuid.UUID `json:"id"`
-	ContentType string    `json:"content_type"`
-	Content     []byte    `json:"content"`
+	ID          uuid.UUID `json:"id" gorm:"type:uuid;primaryKey"`
+	ContentType string    `json:"content_type" gorm:"type:varchar(255);not null"`
+	Content     []byte    `json:"content" gorm:"type:bytea;not null"`
 }

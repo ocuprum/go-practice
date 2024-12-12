@@ -13,11 +13,13 @@ import (
 const CONFIG_NAME, CONFIG_EXTENSION, CONFIG_PATH = "config", "yaml", "."
 
 func main() {
+	// Setting configs
 	conf, err := config.LoadConfig(CONFIG_NAME, CONFIG_EXTENSION, CONFIG_PATH)
 	if err != nil {
 		log.Fatalf("Error loading a config: %v", err)
 	}
 
+	// Connecting to database
 	db, err := pgsql.NewPgSQLConnection(conf.PgSQL)
 	if err != nil {
 		log.Fatalf("Error connecting to pgsql db: %v", err)
@@ -25,6 +27,7 @@ func main() {
 
 	log.Println("Database connected succesfully!")
 	
+	// Check database size
 	DatabaseSize, err := CheckDBSize(db)
 	if err != nil {
 		log.Fatalf("Failed to check database size: %v", err)
@@ -32,8 +35,8 @@ func main() {
 
 	log.Printf("Database Size: %s\n", DatabaseSize)
 
-	// Server
-	srv := server.NewServer(conf.HTTP.Port)
+	// Creating new server and starting to listen
+	srv := server.NewServer(conf.HTTP.Port, db)
 	
 	log.Printf("We are starting on %v", srv.Addr)
 	

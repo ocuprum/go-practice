@@ -3,19 +3,26 @@ package server
 import (
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"testapp/models"
+	repsPgSQL "testapp/repositories/pgsql"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 var jsonData, xmlData []byte
 var srv *http.Server
 
 const FOO_PATH, JSON_PATH, XML_PATH = "/foo", "/json", "/xml"
-const DOWNLOAD_PATH, UPLOAD_PATH = "/download", "/upload"
+const DOWNLOAD_PATH, UPLOAD_PATH, SAVE_DB_PATH = "/download", "/upload", "/savedb"
+const SHOW_PATH = "/show/{id}"
 const FILENAME = "diagram.png"
 
 const maxUploadSize = 10 << 20
@@ -71,7 +78,7 @@ func init() {
 }										   
 
 
-func NewMux() *http.ServeMux {
+func NewMux(conn *gorm.DB) *http.ServeMux {
 	mux := http.NewServeMux()
 	
 	mux.HandleFunc(getPath(FOO_PATH), func(resp http.ResponseWriter, req *http.Request) {
@@ -101,7 +108,7 @@ func NewMux() *http.ServeMux {
 	
 	mux.HandleFunc(postPath(UPLOAD_PATH), func(resp http.ResponseWriter, req *http.Request) {
 		// if file is too large
-		if req.ContentLength > (maxUploadSize) {
+		if req.ContentLength > maxUploadSize {
 			writeResponse(resp, http.StatusRequestEntityTooLarge, "File is too large")
 			return
 		}
@@ -115,9 +122,78 @@ func NewMux() *http.ServeMux {
 		SaveFiles(resp, req)
 	})
 
+	mux.HandleFunc(postPath(SAVE_DB_PATH), func(resp http.ResponseWriter, req *http.Request) {
+		// if file is too large
+		if req.ContentLength > maxUploadSize {
+			writeResponse(resp, http.StatusRequestEntityTooLarge, "File is too large")
+			return
+		}
+
+		if err := req.ParseMultipartForm(maxUploadSize); err != nil {
+			writeResponse(resp, http.StatusBadRequest)
+			return
+		}
+		defer req.MultipartForm.RemoveAll()
+
+		SaveFilesToDB(resp, req, conn)
+	})
+
+	mux.HandleFunc(getPath(SHOW_PATH), func(resp http.ResponseWriter, req *http.Request) {
+		id, err := uuid.Parse(req.PathValue("id"))
+		if err != nil {
+			writeResponse(resp, http.StatusBadRequest, "Error parsing the id")
+			return
+		}
+
+		imageRep := repsPgSQL.NewImageRepository(conn)
+		image, err := imageRep.Get(req.Context(), id)
+		if err != nil {
+			writeResponse(resp, http.StatusInternalServerError, "Error getting the image from db")
+			return
+		}
+		resp.Header().Set("Content-Type", image.ContentType)
+		resp.Write(image.Content)
+	})
+
 	return mux
 }
 
+func SaveFilesToDB(resp http.ResponseWriter, req *http.Request, conn *gorm.DB) {
+	var content []byte
+	var image models.Image
+
+	imageRep := repsPgSQL.NewImageRepository(conn)
+
+	ctx := req.Context()
+
+	for _, header := range req.MultipartForm.File["myfiles"] {
+		file, err := header.Open()
+		if err != nil {
+			writeResponse(resp, http.StatusBadRequest, "Error retrieving a file")
+			return
+		}
+
+		content, err = io.ReadAll(file)
+		if err != nil {
+			writeResponse(resp, http.StatusBadRequest, "Error reading content of a file")
+			return
+		}
+		file.Close()
+
+		image = models.NewImage(uuid.New(), header.Header.Get("Content-Type"), content)
+
+		if err = imageRep.Create(ctx, image); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				writeResponse(resp, http.StatusNotFound, "Image not found")
+			} else {
+				writeResponse(resp, http.StatusInternalServerError, "Database error while retrieving image")
+			}
+			return
+		}
+
+		fmt.Fprintf(resp, "File uploaded successfully: %s\n", header.Filename)
+	}
+}
 
 func SaveFiles(resp http.ResponseWriter,req *http.Request) {
 	// for every file
@@ -173,10 +249,10 @@ func ReadFile(FILENAME string) ([]byte, error) {
 	return fileBytes, nil
 } 
 
-func NewServer(port uint16) *http.Server {
+func NewServer(port uint16, conn *gorm.DB) *http.Server {
 	srv = &http.Server{
 		Addr: fmt.Sprintf(":%v", port),
-		Handler: NewMux(),
+		Handler: NewMux(conn),
 	}
 
 	return srv 

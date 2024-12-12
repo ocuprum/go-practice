@@ -29,7 +29,7 @@ func init() {
 	}
 
 	var port uint16 = 8080
-	srv = NewServer(port)
+	srv = NewServer(port, nil)
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil {
