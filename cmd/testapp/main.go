@@ -2,19 +2,29 @@ package main
 
 import (
 	"log"
-	"testapp/config"
-	"testapp/pgsql"
-	// repsPgSQL "testapp/repositories/pgsql"
-	"testapp/server"
+	"path/filepath"
 
 	"gorm.io/gorm"
+
+	"testapp/internal/handlers"
+	repPgSQL "testapp/internal/repositories/pgsql"
+	"testapp/internal/services"
+	"testapp/pkg/config"
+	"testapp/pkg/pgsql"
+
+	// repsPgSQL "testapp/internal/repositories/pgsql"
+	"testapp/pkg/http"
 )
 
-const CONFIG_NAME, CONFIG_EXTENSION, CONFIG_PATH = "config", "yaml", "."
+const (
+	CONFIG_NAME = "config"
+	CONFIG_EXTENSION = "yaml" 
+	CONFIG_PATH = "."
+)
 
 func main() {
 	// Setting configs
-	conf, err := config.LoadConfig(CONFIG_NAME, CONFIG_EXTENSION, CONFIG_PATH)
+	conf, err := config.LoadConfig(filepath.Join(".", "configs", CONFIG_NAME), CONFIG_EXTENSION, CONFIG_PATH)
 	if err != nil {
 		log.Fatalf("Error loading a config: %v", err)
 	}
@@ -35,8 +45,13 @@ func main() {
 
 	log.Printf("Database Size: %s\n", DatabaseSize)
 
+	imageRep := repPgSQL.NewImageRepository(db)
+	imageServ := services.NewImageService(imageRep)
+	imageHandler := handlers.NewImageHandler(imageServ)
+	formatHandler := handlers.NewFormatHandler()
+
 	// Creating new server and starting to listen
-	srv := server.NewServer(conf.HTTP.Port, db)
+	srv := http.NewServer(conf.HTTP, imageHandler, formatHandler)
 	
 	log.Printf("We are starting on %v", srv.Addr)
 	
@@ -44,7 +59,6 @@ func main() {
 		log.Fatal(err)
 	}
 }
-
 
 type DBSize struct {
 	DatabaseSize string

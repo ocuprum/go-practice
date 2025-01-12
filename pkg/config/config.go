@@ -1,10 +1,10 @@
 package config
 
 import (
-	"testapp/http"
-	"testapp/pgsql"
-
 	"github.com/spf13/viper"
+
+	"testapp/pkg/http"
+	"testapp/pkg/pgsql"
 )
 
 type Config struct {

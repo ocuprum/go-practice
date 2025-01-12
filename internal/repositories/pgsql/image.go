@@ -1,11 +1,11 @@
 package pgsql
 
 import (
-	"context"
-	"testapp/models"
-
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"context"
+
+	"testapp/internal/models"
 )
 
 func NewImageRepository(conn *gorm.DB) *ImageRepository {

@@ -2,11 +2,10 @@ package repositories
 
 import (
 	"context"
-	"testapp/models"
-
 	"github.com/google/uuid"
-)
 
+	"testapp/internal/models"
+)
 
 type ImageRepository interface {
 	Paginate(ctx context.Context, limit, offset int) ([]models.Image, error)

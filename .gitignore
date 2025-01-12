@@ -26,5 +26,8 @@ go.work.sum
 
 .DS_Store
 
-server_client/uploads/*
-server_client/tmp/*
+assets/uploads/*.txt
+assets/uploads/*.png
+assets/tmp/*.png
+
+configs/config.yaml

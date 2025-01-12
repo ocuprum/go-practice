@@ -1,19 +1,19 @@
-package server
+package http
 
 import (
 	"net/http"
 	"strings"
 )
 
-func getPath(path string) string {
+func GetPath(path string) string {
 	return "GET " + path
 }
 
-func postPath(path string) string {
+func PostPath(path string) string {
 	return "POST " + path
 }
 
-func writeResponse(resp http.ResponseWriter, statusCode int, explanations ...string) {
+func WriteResponse(resp http.ResponseWriter, statusCode int, explanations ...string) {
 	resp.WriteHeader(statusCode)
 	resp.Write([]byte(http.StatusText(statusCode)))
 
